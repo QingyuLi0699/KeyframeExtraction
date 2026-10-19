@@ -93,6 +93,16 @@ test('真实 MP4 → 双时间戳 → 多任务 → 恢复 → 两片段提交 �
   await expect(page.getByRole('heading', { name: '片段二', exact: true })).toBeVisible();
   await expect(page.getByText('0 张独立画面', { exact: true })).toBeVisible();
   await finish(page, ['T1','T2','T3','T4']);
+  await expect(page.getByRole('heading', { name: '实验已完成', exact: true })).toBeVisible();
+  await expect(page.locator('.completion-summary')).toContainText('P01');
+  await expect(page.locator('.completion-summary')).toContainText('2 / 2');
+  await expect(page.getByRole('button', { name: '导出实验结果', exact: true })).toBeEnabled();
+  await page.reload();
+  await page.getByLabel('恢复参与者编号', { exact: true }).fill('P01');
+  await page.getByRole('button', { name: '恢复同一会话', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '实验已完成', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '返回检查结果', exact: true }).click();
+  await page.getByLabel('重新关联视频', { exact: true }).setInputFiles([{ name: 'V001_S01.mp4', mimeType: 'video/mp4', buffer: await fs.readFile(fixture) }, { name: 'V001_S02.mp4', mimeType: 'video/mp4', buffer: await fs.readFile(fixture) }]);
   // Revisiting does not invalidate the completed segment unless changed.
   await page.getByLabel('切换片段', { exact: true }).selectOption('0');
   await expect(page.getByText('7 张独立画面', { exact: true })).toBeVisible();
@@ -102,6 +112,17 @@ test('真实 MP4 → 双时间戳 → 多任务 → 恢复 → 两片段提交 �
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.screenshot({ path: 'docs/workspace-1920.png', fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', { name: '返回结束页面', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '实验已完成', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '返回检查结果', exact: true }).click();
+  await page.getByRole('button', { name: '编辑', exact: true }).first().click();
+  const reasonField = page.getByLabel('T1 选择理由', { exact: true });
+  await reasonField.fill((await reasonField.inputValue()) + '\n复核确认');
+  await page.getByRole('button', { name: '保存关键帧', exact: true }).click();
+  await expect(page.getByRole('button', { name: '返回结束页面', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '导出实验结果', exact: true })).toBeDisabled();
+  await finish(page, ['T2', 'T4']);
+  await expect(page.getByRole('heading', { name: '实验已完成', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '导出实验结果', exact: true }).click();
   const downloadEvent = page.waitForEvent('download'); await page.getByRole('button', { name: '下载 ZIP', exact: true }).click();
   const download = await downloadEvent; await download.saveAs('examples/sample-export.zip');
@@ -118,7 +139,7 @@ test('真实 MP4 → 双时间戳 → 多任务 → 恢复 → 两片段提交 �
   expect((await read('segment_results.csv')).trim().split('\r\n')).toHaveLength(3);
   await page.getByRole('button', { name: '已核对下载文件，清除会话', exact: true }).click();
   await page.getByRole('button', { name: '保留数据', exact: true }).click();
-  await expect(page.getByText('7 张独立画面', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '实验已完成', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '核对并清除会话', exact: true }).click();
   await page.getByRole('button', { name: '确认导出完整并清除', exact: true }).click();
   await expect(page.getByRole('button', { name: '开始实验' })).toBeVisible();

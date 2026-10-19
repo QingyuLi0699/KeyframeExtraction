@@ -27,3 +27,12 @@
 .practice-banner p { margin: 6px 0; }
 .practice-complete { max-width: 820px; margin: 40px auto; }
 .practice-complete button { margin: 12px 12px 0 0; }
+
+.completion-page { max-width: 1000px; margin: 32px auto; }
+.completion-page h2 { font-size: 28px; margin: 12px 0; }
+.completion-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 24px 0; }
+.completion-summary > div { padding: 16px; border-radius: 8px; background: #f5f8ff; overflow-wrap: anywhere; }
+.completion-summary small { display: block; color: #758297; }
+.completion-summary strong { display: block; font-size: 22px; margin-top: 6px; }
+.completion-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+@media (max-width: 760px) { .completion-summary { grid-template-columns: 1fr; } .completion-page { margin: 8px auto; } }
