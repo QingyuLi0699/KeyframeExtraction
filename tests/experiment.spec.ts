@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { confirmAfterReading } from './reading';
 import type { Page } from '@playwright/test';
 import JSZip from 'jszip';
 import fs from 'node:fs/promises';
@@ -26,9 +27,11 @@ async function finish(page: Page, empty: string[]) {
 test('真实 MP4 → 双时间戳 → 多任务 → 恢复 → 两片段提交 → ZIP → 确认清除', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto('/'); await materials(page);
+  await page.clock.install();
   await page.getByLabel('参与者编号', { exact: true }).fill('P01');
   await page.getByText('我已阅读并理解四项任务及实验规则').click();
   await page.getByRole('button', { name: '开始实验' }).click();
+  await confirmAfterReading(page);
   await expect(page.locator('video')).toHaveJSProperty('videoWidth', 640);
   await page.locator('video').evaluate((v: HTMLVideoElement) => v.play());
   await expect.poll(() => page.locator('video').evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.1);
@@ -81,6 +84,7 @@ test('真实 MP4 → 双时间戳 → 多任务 → 恢复 → 两片段提交 �
   await expect(page.getByText('恢复已有实验', { exact: true })).toBeVisible();
   await page.getByLabel('恢复参与者编号', { exact: true }).fill('P02'); await expect(page.getByRole('button', { name: '恢复同一会话' })).toBeDisabled();
   await page.getByLabel('恢复参与者编号', { exact: true }).fill('P01'); await page.getByRole('button', { name: '恢复同一会话' }).click();
+  await expect(page.locator('dialog.reading-modal[open]')).toHaveCount(0);
   await expect(page.getByText('7 张独立画面', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '截取当前画面' })).toBeDisabled();
   await page.getByLabel('重新关联视频', { exact: true }).setInputFiles([{ name: 'V001_S01.mp4', mimeType: 'video/mp4', buffer: await fs.readFile(fixture) }, { name: 'V001_S02.mp4', mimeType: 'video/mp4', buffer: await fs.readFile(fixture) }]);
@@ -108,7 +112,7 @@ test('真实 MP4 → 双时间戳 → 多任务 → 恢复 → 两片段提交 �
   expect(metadata.participant_id).toBe('P01'); expect(metadata.completed_segments).toEqual(['V001_S01','V001_S02']);
   expect(allFiles.filter(f => f.name.endsWith('.png'))).toHaveLength(7);
   const frames = await read('frames.csv'); expect(frames.charCodeAt(0)).toBe(0xfeff); expect(frames).toContain('"12.5","601.5"');
-  const selections = await read('selections.csv'); expect(selections).toContain('修改后的文化特色理由'); expect(selections).not.toContain('主要活动'); expect(selections).toContain('""引号""');
+  const selections = await read('selections.csv'); expect(selections).not.toContain('PRACTICE_ONLY_REASON'); expect(selections).not.toContain('PRACTICE'); expect(selections).toContain('修改后的文化特色理由'); expect(selections).not.toContain('主要活动'); expect(selections).toContain('""引号""');
   expect(selections.split('"P01_V001_S01_F0007"').length - 1).toBe(2);
   const taskResults = await read('task_results.csv'); expect(taskResults.trim().split('\r\n')).toHaveLength(9); expect(taskResults).toContain('"T2","0","当前片段没有呈现与该任务相关的内容。"');
   expect((await read('segment_results.csv')).trim().split('\r\n')).toHaveLength(3);
@@ -152,4 +156,56 @@ test('配置校验、错误媒体、导出完整性与多任务唯一图片', as
   await page.getByLabel('关联视频文件', { exact: true }).setInputFiles({name:'V001_S01.mp4',mimeType:'video/mp4',buffer:Buffer.from('not video')});
   await expect(page.getByText('Error: 浏览器无法解码该视频，请使用 H.264 MP4 或兼容 WebM', {exact:true})).toBeVisible();
   await expect(page.getByRole('button', { name:'开始实验' })).toBeDisabled();
+});
+
+
+test('阅读门槛：完整步骤、滚动、29/30 秒边界、关闭与刷新不能跳过练习', async ({ page }) => {
+  await page.goto('/'); await materials(page);
+  await expect(page.getByRole('heading', { name: '实验任务背景', exact: true })).toBeVisible();
+  await expect(page.locator('.task-definitions article')).toHaveCount(4);
+  await page.getByLabel('参与者编号', { exact: true }).fill('Preading');
+  await page.getByRole('checkbox', { name: '我已阅读并理解四项任务及实验规则' }).check();
+  await page.clock.install();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await page.getByRole('button', { name: '开始实验' }).click();
+  const dialog = page.locator('dialog.reading-modal[open]');
+  const go = dialog.getByRole('button', { name: '我已阅读，进入练习', exact: true });
+  await expect(dialog.getByRole('status')).toHaveText('请阅读实验操作说明，30 秒后即可开始');
+  await expect(go).toBeDisabled();
+  await expect(page.locator('.workspace')).toHaveCount(0);
+  await expect(dialog.locator('section')).toHaveCount(5);
+  await expect(dialog).toContainText('练习结果不纳入正式实验。');
+  await expect(dialog).toContainText('确认后进入下一个视频片段。');
+  await expect.poll(() => dialog.locator('.reading-scroll').evaluate(e => e.scrollHeight > e.clientHeight)).toBe(true);
+  await dialog.locator('.reading-scroll').evaluate(e => e.scrollTop = e.scrollHeight);
+  await expect(go).toBeInViewport();
+  await expect(dialog.getByRole('status')).toContainText('30 秒');
+  await page.clock.runFor(29_000);
+  await expect(dialog.getByRole('status')).toHaveText('请阅读实验操作说明，1 秒后即可开始');
+  await expect(go).toBeDisabled();
+  await page.clock.runFor(1000);
+  await expect(go).toBeEnabled();
+  await expect(page.locator('.workspace')).toHaveCount(0);
+  await dialog.getByRole('button', { name: '返回准备页面', exact: true }).click();
+  await expect(page.getByLabel('参与者编号', { exact: true })).toHaveValue('Preading');
+  await page.getByRole('button', { name: '开始实验' }).click();
+  await expect(dialog.getByRole('status')).toContainText('30 秒');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: '开始实验' }).click();
+  await dialog.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: '开始实验' }).click();
+  await page.clock.runFor(15_000);
+  await page.reload();
+  await expect(page.locator('.workspace')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '开始实验' })).toBeDisabled();
+  await expect(page.getByText('恢复已有实验', { exact: true })).toHaveCount(0);
+  await materials(page);
+  await page.getByLabel('参与者编号', { exact: true }).fill('Preading');
+  await page.getByRole('checkbox', { name: '我已阅读并理解四项任务及实验规则' }).check();
+  await page.getByRole('button', { name: '开始实验' }).click();
+  await confirmAfterReading(page);
+  await expect(page.getByText('0 张独立画面', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '片段一', exact: true })).toBeVisible();
 });

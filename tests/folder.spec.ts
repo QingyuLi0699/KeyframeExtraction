@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { confirmAfterReading } from './reading';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 test('从真实文件夹直接导入、核对起点、自动关联并截帧', async ({page}, info) => {
@@ -18,7 +19,9 @@ test('从真实文件夹直接导入、核对起点、自动关联并截帧', as
   await expect(page.getByText('已就绪',{exact:true})).toHaveCount(2);
   await page.getByLabel('参与者编号',{exact:true}).fill('Pfolder');
   await page.getByRole('checkbox',{name:'我已阅读并理解四项任务及实验规则'}).check();
+  await page.clock.install();
   await page.getByRole('button',{name:'开始实验'}).click();
+  await confirmAfterReading(page);
   await expect(page.locator('video')).toHaveJSProperty('videoWidth',640);
   await page.getByLabel('定位秒数',{exact:true}).fill('12.5');
   await page.getByRole('button',{name:'定位',exact:true}).click();
