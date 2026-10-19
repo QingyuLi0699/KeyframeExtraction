@@ -1,5 +1,4 @@
 import type { Session } from './model';
-import { isDemoConfig } from './defaultMaterials';
 
 interface Props {
   session: Session;
@@ -17,7 +16,7 @@ export default function ExperimentComplete({ session, saveStatus, busy, exported
   return <main className="prepare completion-page"><section className="panel">
     <span className="eyebrow">EXPERIMENT COMPLETE</span>
     <h2>实验已完成</h2>
-    <p>{isDemoConfig(session.config) ? '演示已完成！当前结果仅用于展示平台操作效果，不作为正式研究数据。' : '感谢您的参与！所有正式视频片段均已提交。'}</p>
+    <p>感谢您的参与！所有正式视频片段均已提交。</p>
     <div className="completion-summary">
       <div><small>参与者编号</small><strong>{session.participant_id}</strong></div>
       <div><small>已提交片段</small><strong>{session.config.segments.length} / {session.config.segments.length}</strong></div>

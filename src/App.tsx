@@ -10,7 +10,6 @@ import TaskIntro from './TaskIntro';
 import ReadingInstructions from './ReadingInstructions';
 import PracticeStage from './PracticeStage';
 import ExperimentComplete from './ExperimentComplete';
-import { DEMO_CONFIG, isDemoConfig, demoVideoFiles, demoFileStatus } from './defaultMaterials';
 import './instructions.css';
 
 const READING_SECONDS = 30;
@@ -46,7 +45,7 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
   const [pendingRestore, setPendingRestore] = useState(false);
   const [onboarding, setOnboarding] = useState({ read: false, practiced: false });
   const onboardingAttempt = useRef(0);
-  const [files, setFiles] = useState<Record<string, File | string>>({});
+  const [files, setFiles] = useState<Record<string, File>>({});
   const [fileStatus, setFileStatus] = useState<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState('尚未开始实验');
   const [message, setMessage] = useState('');
@@ -76,9 +75,7 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
       setLoading(false); return;
     }
     Promise.all([readConfig(), readSession()]).then(async ([c, saved]) => {
-      const prepared = saved?.config || c || DEMO_CONFIG;
-      setConfig(prepared); setSession(saved); latest.current = saved;
-      if (isDemoConfig(prepared)) { setFiles(demoVideoFiles()); setFileStatus(demoFileStatus()); }
+      setConfig(saved?.config || c); setSession(saved); latest.current = saved;
       setExported(saved?.exported || false);
     }).catch(e => setMessage(`本地数据库无法读取：${String(e)}。请勿在禁用存储的浏览器中进行正式实验。`)).finally(() => setLoading(false));
   }, []);
@@ -105,20 +102,8 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
   const currentTask = TASKS.find(t => t.id === task)!;
   function updateResult(patch: Partial<Result>) { if (!session || !s) return; persist({ ...session, exported: false, results: { ...session.results, [s.segment_id]: { ...result, ...patch, completed: false } } }); }
   function updateFrames(frames: Frame[]) { if (!session || !s) return; persist({ ...session, frames, exported: false, results: { ...session.results, [s.segment_id]: { ...result, completed: false } } }); }
-  async function useDemoMaterials() {
-    if (session || busy) return;
-    setBusy(true);
-    try {
-      await saveConfig(DEMO_CONFIG); setConfig(DEMO_CONFIG);
-      setFiles(demoVideoFiles()); setFileStatus(demoFileStatus());
-      setMessage('已切换到内置演示材料，无需导入视频。演示结果仅用于查看平台效果。');
-    } catch (e) { setMessage(`演示材料加载失败：${String(e)}`); }
-    finally { setBusy(false); }
-  }
   async function importConfig(file: File) {
-    if (session || busy) return;
-    setBusy(true);
-    try { const c = validateConfig(JSON.parse(await file.text())); await saveConfig(c); setConfig(c); setFiles({}); setFileStatus({}); setMessage('配置已导入，请关联对应的视频文件。'); } catch (e) { setMessage(String(e)); } finally { setBusy(false); }
+    try { const c = validateConfig(JSON.parse(await file.text())); await saveConfig(c); setConfig(c); setFiles({}); setFileStatus({}); setMessage('配置已导入，请关联对应的视频文件。'); } catch (e) { setMessage(String(e)); }
   }
   async function associate(list: FileList) {
     if (!config) return; setBusy(true);
@@ -187,7 +172,7 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
       setStage(allComplete ? 'complete' : 'formal');
       setPendingRestore(false);
       setSaveStatus('已恢复本机会话');
-      setMessage(allComplete ? '已恢复完成的实验，可导出结果或返回检查。' : isDemoConfig(session.config) ? '演示已恢复，内置视频已自动关联。' : '实验已恢复；请重新关联原视频文件，已有记录和图片均已保留。');
+      setMessage(allComplete ? '已恢复完成的实验，可导出结果或返回检查。' : '实验已恢复；请重新关联原视频文件，已有记录和图片均已保留。');
       return;
     }
     if (restore || session || !config || !/^[A-Za-z0-9_-]+$/.test(participant.trim()) || !understood) return;
@@ -240,10 +225,9 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
     {!practice && stage === 'complete' && session && allComplete ? <ExperimentComplete session={session} saveStatus={saveStatus} busy={busy} exported={exported} onExport={() => setConfirmExport(true)} onReview={() => { setStage('formal'); setMessage(''); }} onRetry={() => persist(session)} onClear={() => setClearPrompt(true)} /> : !practice && stage === 'practice_complete' ? <main className="prepare"><section className="panel practice-complete"><span className="eyebrow">练习阶段</span><h2>练习完成</h2><p>您已完成平台操作练习。接下来将进入正式实验，请根据四项信息任务独立完成关键帧选择。</p><p className="muted">参与者：{participant.trim()} · 练习结果不纳入正式实验。</p><button className="primary" disabled={busy} onClick={() => void startFormal()}>开始正式实验</button><button disabled={busy} onClick={() => { setStage('intro'); setPendingRestore(false); }}>返回实验首页</button></section></main> : !active ? <main className="prepare">
       <div className="intro"><span className="eyebrow">研究实验平台 / SESSION PREPARATION</span><h2>从视频中，保留你认为需要的画面。</h2><p>观看传统节日视频片段，依据四项信息任务自主选择关键帧，记录你的判断与理由。</p></div>
       <div className="prepare-grid"><TaskIntro />
-      <div className="prepare-side"><section className="panel"><div className="section-title"><span className="section-no">02</span><h2>研究者 · 材料准备</h2></div><p className="muted">可直接体验内置演示视频，或导入自己的实验材料。</p>{isDemoConfig(config) && <p className="rule">已准备内置演示材料，无需导入视频。合成测试画面仅用于体验操作；开展正式研究时请导入真实实验材料。</p>}{!session && <button disabled={busy} onClick={() => void useDemoMaterials()}>使用内置演示材料</button>}{!session && <VideoImport disabled={busy} onBusy={setBusy} onMessage={setMessage} onImport={async (c, imported) => { await saveConfig(c); setConfig(c); setFiles(imported); setFileStatus(Object.fromEntries(c.segments.map(seg => [seg.segment_id, "已就绪"]))); setMessage("视频和片段配置已导入，可以开始实验。"); }} />}<div className="import-actions"><label className={`button ${session || busy ? 'disabled' : ''}`}>导入配置 JSON<input aria-label="导入配置 JSON" type="file" accept=".json,application/json" disabled={!!session || busy} onChange={e => { if (e.target.files?.[0]) void importConfig(e.target.files[0]); e.target.value = ''; }} /></label><label className={`button ${!config || busy ? 'disabled' : ''}`}>关联视频文件<input aria-label="关联视频文件" type="file" accept="video/*,.mp4,.webm" multiple disabled={!config || busy} onChange={e => { if (e.target.files) void associate(e.target.files); e.target.value = ''; }} /></label></div>{config ? <><div className="config-name">{config.experiment_id} <span>{config.segments.length} 个片段</span></div><div className="file-list">{config.segments.map(seg => <div key={seg.segment_id}><strong>{seg.title || seg.segment_id}</strong><small>{seg.filename} · 原视频起点 {time(seg.start_time_sec)}</small><small className={fileStatus[seg.segment_id] === '已就绪' ? 'success' : 'muted'}>{fileStatus[seg.segment_id] || '等待关联视频'}</small></div>)}</div></> : <div className="empty compact">尚未导入实验材料<br/><a href={`${import.meta.env.BASE_URL}examples/experiment.json`} download>下载配置示例 ↓</a></div>}</section>
+      <div className="prepare-side"><section className="panel"><div className="section-title"><span className="section-no">02</span><h2>研究者 · 材料准备</h2></div><p className="muted">可直接选择视频文件夹，或使用 JSON 配置导入。</p>{!session && <VideoImport disabled={busy} onBusy={setBusy} onMessage={setMessage} onImport={async (c, imported) => { await saveConfig(c); setConfig(c); setFiles(imported); setFileStatus(Object.fromEntries(c.segments.map(seg => [seg.segment_id, "已就绪"]))); setMessage("视频和片段配置已导入，可以开始实验。"); }} />}<div className="import-actions"><label className={`button ${session || busy ? 'disabled' : ''}`}>导入配置 JSON<input aria-label="导入配置 JSON" type="file" accept=".json,application/json" disabled={!!session || busy} onChange={e => { if (e.target.files?.[0]) void importConfig(e.target.files[0]); e.target.value = ''; }} /></label><label className={`button ${!config || busy ? 'disabled' : ''}`}>关联视频文件<input aria-label="关联视频文件" type="file" accept="video/*,.mp4,.webm" multiple disabled={!config || busy} onChange={e => { if (e.target.files) void associate(e.target.files); e.target.value = ''; }} /></label></div>{config ? <><div className="config-name">{config.experiment_id} <span>{config.segments.length} 个片段</span></div><div className="file-list">{config.segments.map(seg => <div key={seg.segment_id}><strong>{seg.title || seg.segment_id}</strong><small>{seg.filename} · 原视频起点 {time(seg.start_time_sec)}</small><small className={fileStatus[seg.segment_id] === '已就绪' ? 'success' : 'muted'}>{fileStatus[seg.segment_id] || '等待关联视频'}</small></div>)}</div></> : <div className="empty compact">尚未导入实验材料<br/><a href={`${import.meta.env.BASE_URL}examples/experiment.json`} download>下载配置示例 ↓</a></div>}</section>
       <section className="panel"><div className="section-title"><span className="section-no">03</span><h2>{session ? '恢复已有实验' : '参与者 · 开始实验'}</h2></div>{session ? <><p>检测到本机存在未清除的实验会话。请由研究者核对参与者编号后恢复。</p><label className="field">输入原参与者编号<input aria-label="恢复参与者编号" disabled={busy} value={participant} onChange={e => setParticipant(e.target.value)} placeholder="输入原编号以恢复" autoComplete="off" /></label><button className="primary wide" disabled={participant.trim() !== session.participant_id || busy} onClick={() => openReading(true)}>恢复同一会话</button><p className="muted">下一位参与者开始前，请先完成已有会话的导出和清除。</p>{exported && <button onClick={() => setClearPrompt(true)}>已核对导出文件，清除已有会话</button>}</> : <><label className="field">参与者编号<input aria-label="参与者编号" disabled={busy} value={participant} onChange={e => setParticipant(e.target.value)} placeholder="例如 P01，无需填写姓名" autoComplete="off" /></label><label className="check"><input type="checkbox" checked={understood} onChange={e => setUnderstood(e.target.checked)} />我已阅读并理解四项任务及实验规则</label><button className="primary wide" disabled={busy || !config || !config.segments.every(seg => fileStatus[seg.segment_id] === '已就绪') || !/^[A-Za-z0-9_-]+$/.test(participant.trim()) || !understood} onClick={() => openReading()}>开始实验 <span>→</span></button><small className="muted">编号使用字母、数字、下划线或短横线。会话编号自动生成。</small></>}</section></div></div>
     </main> : session && s ? <main className={practice ? "workspace practice-workspace" : "workspace"}>
-      {!practice && isDemoConfig(session.config) && <div className="practice-banner"><strong>演示模式</strong><p>当前为内置合成演示视频，仅用于查看平台操作效果。演示结果不作为正式研究数据。</p></div>}
       {practice && <div className="practice-banner"><strong>练习阶段</strong><p>本阶段仅用于熟悉平台操作，练习结果不纳入正式实验</p><p>请截取至少一张画面，关联任意任务并填写理由，然后点击“完成练习”。</p></div>}
       <div className="session-bar"><div><span className="eyebrow">EXPERIMENT WORKSPACE</span><h2>{practice ? '练习阶段' : '关键帧选择'}</h2></div><div className="session-detail"><span>参与者 <b>{session.participant_id}</b></span>{!practice && <><span>完成进度 <b>{completedCount} / {session.config.segments.length}</b></span><div className="progress"><i style={{ width: `${completedCount / session.config.segments.length * 100}%` }} /></div></>}<button onClick={() => { video.current?.pause(); if (practice) practice.onExit(); else { setStage('intro'); setParticipant(''); } }}>{practice ? '返回实验首页' : '暂离实验'}</button></div></div>
       <div className="workspace-grid"><section className="panel player-panel"><div className="player-title"><div><span className="eyebrow">当前片段 / {s.segment_id}</span><h2>{s.title || s.segment_id}</h2></div>{!practice && <select aria-label="切换片段" value={session.current} disabled={busy} onChange={e => switchSegment(Number(e.target.value))}>{session.config.segments.map((seg, i) => <option key={seg.segment_id} value={i}>{String(i + 1).padStart(2, '0')} · {seg.title || seg.segment_id}{session.results[seg.segment_id]?.completed ? ' · 已完成' : ''}</option>)}</select>}</div>

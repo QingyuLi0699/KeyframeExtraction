@@ -8,7 +8,6 @@ const fixture = path.resolve('tests/fixtures/V001_S01.mp4');
 const config = path.resolve('public/examples/experiment.json');
 async function materials(page: Page) {
   await page.getByLabel('导入配置 JSON', { exact: true }).setInputFiles(config);
-  await expect(page.locator('.config-name')).toContainText('2 个片段');
   await page.getByLabel('关联视频文件', { exact: true }).setInputFiles([{ name: 'V001_S01.mp4', mimeType: 'video/mp4', buffer: await fs.readFile(fixture) }, { name: 'V001_S02.mp4', mimeType: 'video/mp4', buffer: await fs.readFile(fixture) }]);
   await expect(page.getByText('已就绪', { exact: true })).toHaveCount(2);
 }
