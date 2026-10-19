@@ -1,0 +1,38 @@
+import { test, expect } from '@playwright/test';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+test('从真实文件夹直接导入、核对起点、自动关联并截帧', async ({page}, info) => {
+  const folder = info.outputPath('videos'); await fs.mkdir(folder, {recursive:true});
+  await fs.copyFile('tests/fixtures/V001_S01.mp4',path.join(folder,'clip2.mp4'));
+  await fs.copyFile('tests/fixtures/V001_S01.mp4',path.join(folder,'clip10.mp4'));
+  await fs.writeFile(path.join(folder,'notes.txt'),'ignored');
+  await page.goto('/');
+  await page.getByLabel('从文件夹导入',{exact:true}).setInputFiles(folder);
+  await expect(page.getByRole('heading',{name:'确认视频片段信息'})).toBeVisible();
+  await expect(page.getByText('实际时长 16.000 秒',{exact:true})).toHaveCount(2);
+  await expect(page.getByRole('button',{name:'确认导入视频',exact:true})).toBeDisabled();
+  await expect(page.locator('.video-import-rows strong').first()).toHaveText('1. clip2.mp4');
+  await page.getByLabel('clip2.mp4 原视频起点',{exact:true}).fill('589');
+  await page.getByLabel('clip10.mp4 原视频起点',{exact:true}).fill('605');
+  await page.getByRole('button',{name:'确认导入视频',exact:true}).click();
+  await expect(page.getByText('已就绪',{exact:true})).toHaveCount(2);
+  await page.getByLabel('参与者编号',{exact:true}).fill('Pfolder');
+  await page.getByRole('checkbox',{name:'我已阅读并理解四项任务及实验规则'}).check();
+  await page.getByRole('button',{name:'开始实验'}).click();
+  await expect(page.locator('video')).toHaveJSProperty('videoWidth',640);
+  await page.getByLabel('定位秒数',{exact:true}).fill('12.5');
+  await page.getByRole('button',{name:'定位',exact:true}).click();
+  await expect.poll(()=>page.locator('video').evaluate((v:HTMLVideoElement)=>!v.seeking&&v.currentTime===12.5)).toBe(true);
+  await page.getByRole('button',{name:'截取当前画面'}).click();
+  await expect(page.locator('dialog[open]')).toContainText('00:10:01.500');
+});
+test('直接选择多个文件，无需 JSON；取消保留原配置',async ({page})=>{
+  await page.goto('/');
+  await page.getByLabel('直接选择视频',{exact:true}).setInputFiles('tests/fixtures/V001_S01.mp4');
+  await page.getByRole('button',{name:'取消导入',exact:true}).click();
+  await expect(page.getByText('尚未导入实验材料',{exact:false})).toBeVisible();
+  await page.getByLabel('直接选择视频',{exact:true}).setInputFiles('tests/fixtures/V001_S01.mp4');
+  await page.getByLabel('V001_S01.mp4 原视频起点',{exact:true}).fill('0');
+  await page.getByRole('button',{name:'确认导入视频',exact:true}).click();
+  await expect(page.getByText('已就绪',{exact:true})).toBeVisible();
+});

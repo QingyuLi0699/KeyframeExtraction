@@ -1,0 +1,7 @@
+{
+  "experiment_id": "festival_keyframe_study",
+  "segments": [
+    {"video_id":"V001","segment_id":"V001_S01","filename":"V001_S01.mp4","start_time_sec":589,"end_time_sec":605,"duration_sec":16,"title":"片段一"},
+    {"video_id":"V001","segment_id":"V001_S02","filename":"V001_S02.mp4","start_time_sec":605,"end_time_sec":621,"duration_sec":16,"title":"片段二"}
+  ]
+}
