@@ -72,14 +72,14 @@ test('缺少练习素材不能跳过；同一参与者阅读和练习各完成�
   await expect(page.locator('dialog.reading-modal[open]')).toContainText('30 秒');
   await page.clock.runFor(30_000);
   await page.getByRole('button', { name: '我已阅读，进入练习', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('尚未配置练习视频');
+  await expect(page.getByRole('alert')).toContainText('练习视频无法加载');
   await expect(page.locator('video')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '开始正式实验', exact: true })).toHaveCount(0);
   await page.getByLabel('选择练习视频', { exact: true }).setInputFiles('tests/fixtures/V001_S01.mp4');
   await expect(page.locator('.practice-workspace video')).toHaveJSProperty('videoWidth', 640);
   await page.getByRole('button', { name: '返回实验首页', exact: true }).click();
   await page.getByRole('button', { name: '开始实验' }).click();
-  await expect(page.getByRole('alert')).toContainText('尚未配置练习视频');
+  await expect(page.getByRole('alert')).toContainText('练习视频无法加载');
   await expect(page.locator('dialog.reading-modal[open]')).toHaveCount(0);
   expect(await saved(page)).toBeUndefined();
   // The completed reading persists, while the unfinished practice is still required.
@@ -145,4 +145,28 @@ test('旧会话必须补做新流程，练习和恢复均保留原片段进度�
   await page.getByRole('button', { name: '恢复同一会话' }).click();
   await expect(page.locator('.workspace:not(.practice-workspace)')).toBeVisible();
   await expect(page.locator('dialog.reading-modal[open]')).toHaveCount(0);
+});
+
+
+test('慢网络加载有超时提示和重试，使用媒体请求而非完整文件下载', async ({ page }) => {
+  await home(page, 'Pslow'); await page.clock.install();
+  await page.route('**/practice/config.json', () => new Promise(() => {}));
+  await page.getByRole('button', { name: '开始实验' }).click();
+  await expect(page.locator('dialog.reading-modal[open]')).toContainText('30 秒');
+  await page.clock.runFor(30_000);
+  await page.getByRole('button', { name: '我已阅读，进入练习', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('正在读取练习视频');
+  await page.clock.runFor(30_000);
+  await expect(page.getByRole('alert')).toContainText('加载超时');
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await page.unroute('**/practice/config.json');
+  await mockPracticeVideo(page);
+  const types: string[] = [];
+  page.on('request', request => { if (request.url().endsWith('/practice/practice.mp4')) types.push(request.resourceType()); });
+  await page.getByRole('button', { name: '重试加载', exact: true }).click();
+  await expect(page.locator('.practice-workspace video')).toHaveJSProperty('videoWidth', 640);
+  expect(types.length).toBeGreaterThan(0);
+  expect(types.every(type => type === 'media')).toBe(true);
+  await completePractice(page);
+  expect(await saved(page)).toBeUndefined();
 });

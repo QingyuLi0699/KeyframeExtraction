@@ -1,9 +1,17 @@
 import { expect, type Page } from '@playwright/test';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 
 export async function mockPracticeVideo(page: Page) {
   // Test-only synthetic media served at the independent practice resource URL.
-  await page.route('**/practice/practice.mp4', route => route.fulfill({ path: path.resolve('tests/fixtures/V001_S01.mp4'), contentType: 'video/mp4' }));
+  const media = await fs.readFile(path.resolve('tests/fixtures/V001_S01.mp4'));
+  await page.route('**/practice/practice.mp4', route => {
+    const range = route.request().headers()['range']?.match(/^bytes=(\d*)-(\d*)$/);
+    if (!range) return route.fulfill({ body: media, contentType: 'video/mp4', headers: { 'Accept-Ranges': 'bytes' } });
+    const start = range[1] ? Number(range[1]) : Math.max(0, media.length - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), media.length - 1) : media.length - 1;
+    return route.fulfill({ status: 206, body: media.subarray(start, end + 1), contentType: 'video/mp4', headers: { 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${media.length}` } });
+  });
 }
 export async function enterPracticeAfterReading(page: Page) {
   await mockPracticeVideo(page);

@@ -11,6 +11,26 @@ export async function probeVideo(file: File, s?: Segment): Promise<number> {
     });
   } finally { v.removeAttribute('src'); v.load(); URL.revokeObjectURL(url); }
 }
+// Let the browser request byte ranges instead of downloading a complete remote video.
+export async function probeVideoUrl(url: string, signal: AbortSignal): Promise<number> {
+  const video = document.createElement('video'); video.preload = 'auto'; video.muted = true;
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      const cleanup = () => { clearTimeout(timer); video.onloadeddata = null; video.onerror = null; signal.removeEventListener('abort', abort); };
+      const fail = (error: Error) => { cleanup(); reject(error); };
+      const abort = () => fail(new DOMException('已取消加载', 'AbortError'));
+      const timer = window.setTimeout(() => fail(Error('练习视频加载超时，请重试或选择本地练习视频。')), 20000);
+      if (signal.aborted) { abort(); return; }
+      signal.addEventListener('abort', abort, { once: true });
+      video.onerror = () => fail(Error('练习视频无法加载，请重试或选择本地练习视频。'));
+      video.onloadeddata = () => {
+        if (!Number.isFinite(video.duration) || video.duration <= 0 || !video.videoWidth) { fail(Error('无法读取练习视频时长或画面')); return; }
+        const duration = video.duration; cleanup(); resolve(duration);
+      };
+      video.src = url;
+    });
+  } finally { video.removeAttribute('src'); video.load(); }
+}
 export async function captureVideo(v: HTMLVideoElement): Promise<{ image: Blob; mediaTime: number }> {
   v.pause();
   if (v.seeking || v.readyState < 2 || !v.videoWidth) throw Error('画面尚未就绪，请等待视频定位完成。');

@@ -15,7 +15,7 @@ const READING_SECONDS = 30;
 type Stage = 'intro' | 'instructions' | 'practice' | 'practice_complete' | 'formal';
 export interface PracticeWorkspace {
   initial: Session;
-  file: File;
+  file: File | string;
   onComplete: () => Promise<void>;
   onExit: () => void;
 }
@@ -69,7 +69,7 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
     // A practice workspace owns a separate in-memory session and never opens saved results.
     if (practice) {
       setConfig(practice.initial.config); setSession(practice.initial);
-      setFiles({ [practice.file.name]: practice.file });
+      if (typeof practice.file !== 'string') setFiles({ [practice.file.name]: practice.file });
       setFileStatus({ PRACTICE: '已就绪' }); setSaveStatus('练习数据仅临时保存');
       setLoading(false); return;
     }
@@ -91,8 +91,8 @@ export default function App({ practice }: { practice?: PracticeWorkspace } = {})
     void saveQueue.current.then(() => { if (latest.current === next) setSaveStatus('已保存到本机'); }).catch(e => setSaveStatus(`保存失败：${String(e)}，请保留页面并重试`));
   }
   const s = session?.config.segments[session.current];
-  const selectedFile = s ? files[s.filename] : undefined;
-  useEffect(() => { setVideoReady(false); setCurrentTime(0); setSeekInput(''); if (!selectedFile) { setVideoUrl(''); return; } const url = URL.createObjectURL(selectedFile); setVideoUrl(url); return () => URL.revokeObjectURL(url); }, [selectedFile, s?.segment_id]);
+  const selectedFile = practice?.file || (s ? files[s.filename] : undefined);
+  useEffect(() => { setVideoReady(false); setCurrentTime(0); setSeekInput(''); if (!selectedFile) { setVideoUrl(''); return; } if (typeof selectedFile === 'string') { setVideoUrl(selectedFile); return; } const url = URL.createObjectURL(selectedFile); setVideoUrl(url); return () => URL.revokeObjectURL(url); }, [selectedFile, s?.segment_id]);
   useEffect(() => { if (active && video.current) return observeFrames(video.current); }, [active, videoUrl]);
   const segmentFrames = session?.frames.filter(f => f.segment_id === s?.segment_id) || [];
   const result = s && session ? session.results[s.segment_id] || emptyResult() : emptyResult();
