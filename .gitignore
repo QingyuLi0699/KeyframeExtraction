@@ -6,3 +6,8 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 .remote-inspect/
+
+# Local original videos and superseded conversion output; publish only practice-web.mp4.
+/public/demo/test.mp4
+/public/demo/test-web.mp4
+/public/demo/practice.mp4

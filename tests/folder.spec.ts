@@ -33,7 +33,7 @@ test('直接选择多个文件，无需 JSON；取消保留原配置',async ({pa
   await page.goto('/');
   await page.getByLabel('直接选择视频',{exact:true}).setInputFiles('tests/fixtures/V001_S01.mp4');
   await page.getByRole('button',{name:'取消导入',exact:true}).click();
-  await expect(page.getByText('尚未导入实验材料',{exact:false})).toBeVisible();
+  await expect(page.getByText('已准备内置演示材料，无需导入视频。当前为研究者提供的展示视频；开展正式研究时可导入正式材料。', { exact: true })).toBeVisible();
   await page.getByLabel('直接选择视频',{exact:true}).setInputFiles('tests/fixtures/V001_S01.mp4');
   await page.getByLabel('V001_S01.mp4 原视频起点',{exact:true}).fill('0');
   await page.getByRole('button',{name:'确认导入视频',exact:true}).click();
